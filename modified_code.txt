@@ -1,0 +1,1316 @@
+# Agatha Christie 25-Motif Self-Organizing Evolution Analysis
+
+
+# ============================================================================
+# 1. SETUP AND IMPORTS
+# ============================================================================
+
+import os
+import re
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from collections import Counter, defaultdict
+import networkx as nx
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.cluster import KMeans
+from sklearn.decomposition import PCA
+from sklearn.metrics.pairwise import cosine_similarity
+from scipy import stats
+from scipy.signal import find_peaks
+import warnings
+warnings.filterwarnings('ignore')
+
+# Install required packages
+!pip install ebooklib beautifulsoup4 wordcloud
+
+import ebooklib
+from ebooklib import epub
+from bs4 import BeautifulSoup
+from wordcloud import WordCloud
+
+# Mount Google Drive
+from google.colab import drive
+drive.mount('/content/drive')
+
+# Set paths
+BASE_PATH = '/content/drive/MyDrive/AC'
+EPUB_PATH = f'{BASE_PATH}/66Works'
+CSV_PATH = f'{BASE_PATH}/christie_list.csv'
+OUTPUT_PATH = f'{BASE_PATH}/analysis_results_25motifs'
+
+# Create output directory
+os.makedirs(OUTPUT_PATH, exist_ok=True)
+
+print("Setup completed. Starting 25-motif analysis...")
+
+# ============================================================================
+# 2. DATA LOADING AND PREPROCESSING
+# ============================================================================
+
+def extract_text_from_epub(epub_path):
+    """Extract clean text from EPUB file"""
+    try:
+        book = epub.read_epub(epub_path)
+        text = ""
+        
+        for item in book.get_items():
+            if item.get_type() == ebooklib.ITEM_DOCUMENT:
+                soup = BeautifulSoup(item.get_content(), 'html.parser')
+                text += soup.get_text() + " "
+        
+        # Clean text
+        text = re.sub(r'\s+', ' ', text)  # Multiple spaces to single
+        text = re.sub(r'[^\w\s\.\!\?\,\;\:]', '', text)  # Keep basic punctuation
+        return text.strip()
+    except Exception as e:
+        print(f"Error reading {epub_path}: {e}")
+        return ""
+
+def load_christie_data():
+    """Load metadata and extract texts from all Christie works"""
+    # Load metadata
+    metadata_df = pd.read_csv(CSV_PATH, encoding='cp1252')
+    print(f"Loaded metadata for {len(metadata_df)} works")
+    
+    # Extract texts
+    texts_data = []
+    file_names = [
+        "01_The Mysterious Affair at Styles_1920", "02_The Secret Adversary_1922",
+        "03_The Murder on the Links_1923", "04_The Man in the Brown Suit_1924",
+        "05_The Secret of Chimneys_1925", "06_The Murder of Roger Ackroyd_1926",
+        "07_The Big Four_1927", "08_The Mystery of the Blue Train_1928",
+        "09_The Seven Dials Mystery_1929", "10_The Murder at the Vicarage_1930",
+        "11_The Sittaford Mystery_1931", "12_Peril at End House_1932",
+        "13_Lord Edgware Dies_1933", "14_Why Didn't They Ask Evans_1934",
+        "15_Murder on the Orient Express_1934", "16_Three Act Tragedy_1935",
+        "17_Death in the Clouds_1935", "18_The ABC Murders_1936",
+        "19_Murder in Mesopotamia_1936", "20_Cards on the Table_1936",
+        "21_Dumb Witness_1937", "22_Death on the Nile_1937",
+        "23_Appointment with Death_1938", "24_Hercule Poirot's Christmas_1938",
+        "25_Murder Is Easy_1939", "26_And Then There Were None_1939",
+        "27_One, Two, Buckle My Shoe_1940", "28_Sad Cypress_1940",
+        "29_Evil Under the Sun_1941", "30_N or M_1941",
+        "31_The Body in the Library_1942", "32_Five Little Pigs_1942",
+        "33_The Moving Finger_1942", "34_Towards Zero_1944",
+        "35_Death Comes as the End_1944", "36_Sparkling Cyanide_1945",
+        "37_The Hollow_1946", "38_Taken at the Flood_1948",
+        "39_Crooked House_1949", "40_A Murder Is Announced_1950",
+        "41_They Came to Baghdad_1951", "42_They Do It with Mirrors_1952",
+        "43_Mrs McGinty's Dead_1952", "44_After the Funeral_1953",
+        "45_A Pocket Full of Rye_1953", "46_Destination Unknown_1954",
+        "47_Hickory Dickory Dock_1955", "48_Dead Man's Folly_1956",
+        "49_450 from Paddington_1957", "50_Ordeal by Innocence_1958",
+        "51_Cat Among the Pigeons_1959", "52_The Pale Horse_1961",
+        "53_The Mirror Crack'd from Side to Side_1962", "54_The Clocks_1963",
+        "55_A Caribbean Mystery_1964", "56_At Bertram's Hotel_1965",
+        "57_Third Girl_1966", "58_Endless Night_1967",
+        "59_By the Pricking of My Thumbs_1968", "60_Hallowe'en Party_1969",
+        "61_Passenger to Frankfurt_1970", "62_Nemesis_1971",
+        "63_Elephants Can Remember_1972", "64_Postern of Fate_1973",
+        "65_Curtain_1975", "66_Sleeping Murder_1976"
+    ]
+    
+    for filename in file_names:
+        epub_file = f"{EPUB_PATH}/{filename}.epub"
+        if os.path.exists(epub_file):
+            text = extract_text_from_epub(epub_file)
+            year = int(filename.split('_')[-1])
+            title = '_'.join(filename.split('_')[1:-1])
+            
+            texts_data.append({
+                'filename': filename,
+                'title': title,
+                'year': year,
+                'text': text,
+                'word_count': len(text.split())
+            })
+            print(f"Processed: {title} ({year}) - {len(text.split())} words")
+        else:
+            print(f"File not found: {epub_file}")
+    
+    return pd.DataFrame(texts_data), metadata_df
+
+# Load data
+texts_df, metadata_df = load_christie_data()
+print(f"\nSuccessfully loaded {len(texts_df)} texts")
+
+# ============================================================================
+# 3. EXPANDED MOTIF DISCOVERY (25 MOTIFS)
+# ============================================================================
+
+def discover_detective_motifs_25(texts_df, top_n=25):
+    """Discover 25 key motifs using expanded methodology"""
+    
+    # Comprehensive detective fiction terms
+    detective_terms = [
+        # Core crime terms
+        'murder', 'death', 'kill', 'poison', 'shot', 'stab', 'strangle', 
+        'suicide', 'accident', 'victim', 'corpse', 'body',
+        
+        # Investigation terms
+        'inspector', 'detective', 'police', 'investigation', 'crime',
+        'evidence', 'clue', 'witness', 'testimony', 'fingerprint',
+        'weapon', 'gun', 'knife', 'blood', 'footprint',
+        
+        # People and relationships
+        'suspect', 'accused', 'guilty', 'innocent', 'murderer',
+        'criminal', 'butler', 'servant', 'husband', 'wife', 
+        'lover', 'friend', 'enemy', 'nephew', 'niece',
+        
+        # Motives and background
+        'motive', 'alibi', 'inheritance', 'will', 'money', 'blackmail',
+        'revenge', 'jealousy', 'greed', 'secret', 'scandal', 'affair',
+        
+        # Settings and atmosphere
+        'room', 'house', 'library', 'garden', 'bedroom', 'study',
+        'door', 'window', 'locked', 'key', 'safe', 'hall',
+        'night', 'morning', 'evening', 'dark', 'quiet',
+        
+        # Emotions and psychology
+        'fear', 'terror', 'shock', 'surprise', 'nervous', 'worried',
+        'frightened', 'suspicious', 'anxious', 'strange', 'mysterious',
+        
+        # Actions and discoveries
+        'discover', 'find', 'search', 'hide', 'escape', 'confess',
+        'lie', 'truth', 'admit', 'deny', 'accuse', 'reveal',
+        
+        # Objects and clues
+        'letter', 'note', 'diary', 'photograph', 'ring', 'watch',
+        'glass', 'cup', 'bottle', 'dress', 'coat', 'hat'
+    ]
+    
+    # Combine all texts for TF-IDF analysis
+    all_text = ' '.join(texts_df['text'].tolist())
+    
+    # TF-IDF settings for more sensitive detection
+    vectorizer = TfidfVectorizer(
+        max_features=2000,
+        stop_words='english',
+        ngram_range=(1, 2),
+        min_df=2,  # Minimum 2 documents (more sensitive)
+        max_df=0.95,  # Exclude very common terms
+        lowercase=True
+    )
+    
+    tfidf_matrix = vectorizer.fit_transform(texts_df['text'])
+    feature_names = vectorizer.get_feature_names_out()
+    
+    # Calculate average TF-IDF scores
+    mean_scores = np.mean(tfidf_matrix.toarray(), axis=0)
+    score_df = pd.DataFrame({
+        'term': feature_names,
+        'tfidf_score': mean_scores
+    }).sort_values('tfidf_score', ascending=False)
+    
+    discovered_motifs = []
+    
+    # Phase 1: Add high-priority detective terms that appear in TF-IDF results
+    priority_terms = ['murder', 'death', 'inspector', 'police', 'money', 'secret', 
+                     'evidence', 'suspect', 'crime', 'detective', 'witness']
+    
+    for term in priority_terms:
+        if term in score_df['term'].values and term not in discovered_motifs:
+            discovered_motifs.append(term)
+    
+    # Phase 2: Add other detective terms from our comprehensive list
+    for term in detective_terms:
+        if (term in score_df['term'].values and 
+            term not in discovered_motifs and 
+            len(discovered_motifs) < top_n):
+            discovered_motifs.append(term)
+    
+    # Phase 3: Add high TF-IDF terms that are relevant to detective fiction
+    detective_keywords = [
+        'murder', 'death', 'kill', 'poison', 'room', 'house', 'money', 
+        'secret', 'blood', 'weapon', 'police', 'crime', 'suspect',
+        'fear', 'night', 'door', 'window', 'letter', 'woman', 'man',
+        'lady', 'gentleman', 'young', 'old', 'dead', 'strange',
+        'mysterious', 'curious', 'sudden', 'quiet', 'dark', 'find',
+        'discover', 'hide', 'escape', 'guilty', 'innocent', 'truth',
+        'lie', 'wife', 'husband', 'lover', 'friend', 'enemy'
+    ]
+    
+    for _, row in score_df.head(150).iterrows():
+        term = row['term']
+        if (len(discovered_motifs) >= top_n):
+            break
+            
+        if (len(term) > 2 and 
+            not term.isdigit() and
+            term not in discovered_motifs and
+            not any(char.isdigit() for char in term) and
+            ' ' not in term and  # Prefer single words for consistency
+            any(keyword in term.lower() for keyword in detective_keywords)):
+            discovered_motifs.append(term)
+    
+    # Phase 4: Fill remaining slots with most relevant 2-grams if needed
+    if len(discovered_motifs) < top_n:
+        for _, row in score_df.head(200).iterrows():
+            term = row['term']
+            if len(discovered_motifs) >= top_n:
+                break
+                
+            if (term not in discovered_motifs and
+                any(keyword in term.lower() for keyword in detective_keywords) and
+                len(term.split()) <= 2):
+                discovered_motifs.append(term)
+    
+    # Remove duplicates and ensure we have exactly top_n motifs
+    discovered_motifs = list(dict.fromkeys(discovered_motifs))[:top_n]
+    
+    print(f"\nDiscovered {len(discovered_motifs)} motifs for expanded analysis:")
+    for i, motif in enumerate(discovered_motifs, 1):
+        tfidf_score = score_df[score_df['term'] == motif]['tfidf_score'].iloc[0] if motif in score_df['term'].values else 0
+        print(f"{i:2d}. {motif:<15} (TF-IDF: {tfidf_score:.4f})")
+    
+    return discovered_motifs
+
+def extract_motif_frequencies(texts_df, motifs):
+    """Extract motif frequencies from each text"""
+    motif_data = []
+    
+    for _, row in texts_df.iterrows():
+        text = row['text'].lower()
+        motif_counts = {}
+        
+        for motif in motifs:
+            # Handle both single words and phrases
+            if ' ' in motif:
+                # For phrases, search as-is
+                pattern = re.escape(motif.lower())
+                count = len(re.findall(pattern, text))
+            else:
+                # For single words, use word boundaries
+                pattern = r'\b' + re.escape(motif.lower()) + r'\b'
+                count = len(re.findall(pattern, text))
+            
+            # Normalize by text length (per 1000 words)
+            normalized_count = (count / row['word_count']) * 1000 if row['word_count'] > 0 else 0
+            motif_counts[motif] = normalized_count
+        
+        motif_data.append({
+            'title': row['title'],
+            'year': row['year'],
+            'filename': row['filename'],
+            **motif_counts
+        })
+    
+    return pd.DataFrame(motif_data)
+
+# ============================================================================
+# 4.  ANALYSIS FUNCTIONS
+# ============================================================================
+
+def analyze_motif_significance(motif_df, motifs):
+    """Analyze motif significance with multiple criteria"""
+    significance_scores = {}
+    
+    for motif in motifs:
+        # 1. Mean frequency
+        mean_freq = motif_df[motif].mean()
+        
+        # 2. Coefficient of variation (consistency measure)
+        cv = motif_df[motif].std() / mean_freq if mean_freq > 0 else 0
+        
+        # 3. Temporal correlation (trend strength)
+        years = motif_df['year'].values
+        frequencies = motif_df[motif].values
+        time_correlation = abs(np.corrcoef(years, frequencies)[0, 1]) if len(set(frequencies)) > 1 else 0
+        
+        # 4. Dynamic range
+        dynamic_range = motif_df[motif].max() - motif_df[motif].min()
+        
+        # 5. Presence consistency (how many works contain this motif)
+        presence_rate = np.sum(motif_df[motif] > 0) / len(motif_df)
+        
+        # Composite significance score
+        # Balance frequency, stability, evolution, range, and presence
+        significance_score = (
+            mean_freq * 0.3 +                    # 30%: Basic importance
+            (1 / (1 + cv)) * 0.2 +               # 20%: Stability (inverse of CV)
+            time_correlation * 0.2 +             # 20%: Temporal evolution
+            dynamic_range * 0.15 +               # 15%: Variability
+            presence_rate * 0.15                 # 15%: Consistency across works
+        )
+        
+        significance_scores[motif] = {
+            'score': significance_score,
+            'mean_freq': mean_freq,
+            'cv': cv,
+            'time_corr': time_correlation,
+            'dynamic_range': dynamic_range,
+            'presence_rate': presence_rate
+        }
+    
+    return significance_scores
+
+def analyze_temporal_evolution(motif_df, motifs):
+    """Analyze how motifs evolve over time"""
+    motif_df_sorted = motif_df.sort_values('year')
+    evolution_data = {}
+    window_size = 5
+    
+    for motif in motifs:
+        evolution_data[motif] = {
+            'years': motif_df_sorted['year'].tolist(),
+            'frequencies': motif_df_sorted[motif].tolist(),
+            'rolling_mean': motif_df_sorted[motif].rolling(window=window_size, center=True).mean().tolist()
+        }
+    
+    return evolution_data
+
+def calculate_motif_correlations(motif_df, motifs):
+    """Calculate correlations between motifs"""
+    correlation_matrix = motif_df[motifs].corr()
+    return correlation_matrix
+
+def detect_critical_points(motif_df, motifs):
+    """Detect critical points in motif evolution"""
+    critical_points = {}
+    
+    for motif in motifs:
+        values = motif_df.sort_values('year')[motif].values
+        years = motif_df.sort_values('year')['year'].values
+        
+        # Calculate gradient
+        gradient = np.gradient(values)
+        
+        # Find significant changes
+        threshold = np.std(gradient) * 1.5
+        peaks, _ = find_peaks(np.abs(gradient), height=threshold)
+        
+        critical_points[motif] = {
+            'years': years[peaks].tolist(),
+            'values': values[peaks].tolist(),
+            'gradient': gradient[peaks].tolist()
+        }
+    
+    return critical_points
+
+def analyze_motif_clusters(motif_df, motifs, n_clusters=5):
+    """Cluster works based on motif patterns"""
+    X = motif_df[motifs].values
+    
+    # Perform clustering
+    kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
+    clusters = kmeans.fit_predict(X)
+    
+    # Add cluster labels
+    motif_df_clustered = motif_df.copy()
+    motif_df_clustered['cluster'] = clusters
+    
+    # Analyze clusters
+    cluster_analysis = {}
+    for i in range(n_clusters):
+        cluster_works = motif_df_clustered[motif_df_clustered['cluster'] == i]
+        cluster_analysis[i] = {
+            'count': len(cluster_works),
+            'years': cluster_works['year'].tolist(),
+            'titles': cluster_works['title'].tolist(),
+            'motif_means': cluster_works[motifs].mean().to_dict()
+        }
+    
+    return motif_df_clustered, cluster_analysis, kmeans
+
+# ============================================================================
+# 5. VISUALIZATION
+# ============================================================================
+
+def create_temporal_evolution_plot_25(evolution_data, motifs, significance_scores):
+    """Create temporal evolution visualization for 25 motifs"""
+    # Sort motifs by significance
+    sorted_motifs = sorted(motifs, key=lambda x: significance_scores[x]['score'], reverse=True)
+    
+    fig, axes = plt.subplots(5, 5, figsize=(25, 20))
+    axes = axes.flatten()
+    
+    for i, motif in enumerate(sorted_motifs):
+        if i < len(axes):
+            ax = axes[i]
+            years = evolution_data[motif]['years']
+            frequencies = evolution_data[motif]['frequencies']
+            rolling_mean = evolution_data[motif]['rolling_mean']
+            
+            # Plot raw data and smoothed line
+            ax.scatter(years, frequencies, alpha=0.6, s=20, color='lightblue')
+            ax.plot(years, rolling_mean, color='darkblue', linewidth=2, label='Trend')
+            
+            # Add significance score to title
+            sig_score = significance_scores[motif]['score']
+            ax.set_title(f'{motif} (sig: {sig_score:.3f})', fontsize=10, fontweight='bold')
+            ax.set_xlabel('Year', fontsize=8)
+            ax.set_ylabel('Frequency (per 1000 words)', fontsize=8)
+            ax.grid(True, alpha=0.3)
+            ax.tick_params(labelsize=8)
+    
+    plt.tight_layout()
+    plt.savefig(f'{OUTPUT_PATH}/temporal_evolution_25motifs.png', dpi=300, bbox_inches='tight')
+    plt.show()
+
+def create_correlation_heatmap_25(correlation_matrix, significance_scores):
+    """Create correlation heatmap for 25 motifs"""
+    # Sort by significance
+    motifs_sorted = sorted(correlation_matrix.index, 
+                          key=lambda x: significance_scores[x]['score'], reverse=True)
+    
+    # Reorder correlation matrix
+    corr_sorted = correlation_matrix.loc[motifs_sorted, motifs_sorted]
+    
+    plt.figure(figsize=(16, 14))
+    mask = np.triu(np.ones_like(corr_sorted, dtype=bool))
+    sns.heatmap(corr_sorted, 
+                mask=mask,
+                annot=True, 
+                cmap='RdYlBu_r', 
+                center=0,
+                square=True,
+                cbar_kws={'label': 'Correlation Coefficient'},
+                fmt='.2f',
+                annot_kws={'size': 6})
+    plt.title('25-Motif Correlation Matrix (Ordered by Significance)', fontsize=16, fontweight='bold')
+    plt.xticks(rotation=45, ha='right', fontsize=8)
+    plt.yticks(rotation=0, fontsize=8)
+    plt.tight_layout()
+    plt.savefig(f'{OUTPUT_PATH}/correlation_heatmap_25motifs.png', dpi=300, bbox_inches='tight')
+    plt.show()
+
+def create_significance_ranking_plot(significance_scores):
+    """Create motif significance ranking visualization"""
+    # Prepare data
+    motifs = list(significance_scores.keys())
+    scores = [significance_scores[m]['score'] for m in motifs]
+    mean_freqs = [significance_scores[m]['mean_freq'] for m in motifs]
+    
+    # Sort by significance
+    sorted_data = sorted(zip(motifs, scores, mean_freqs), key=lambda x: x[1], reverse=True)
+    sorted_motifs, sorted_scores, sorted_freqs = zip(*sorted_data)
+    
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 8))
+    
+    # Plot 1: Significance scores
+    bars1 = ax1.barh(range(len(sorted_motifs)), sorted_scores, color='skyblue', alpha=0.7)
+    ax1.set_yticks(range(len(sorted_motifs)))
+    ax1.set_yticklabels(sorted_motifs, fontsize=10)
+    ax1.set_xlabel('Significance Score', fontsize=12)
+    ax1.set_title('Motif Significance Ranking', fontsize=14, fontweight='bold')
+    ax1.grid(True, alpha=0.3)
+    
+    # Add score labels
+    for i, bar in enumerate(bars1):
+        width = bar.get_width()
+        ax1.text(width + 0.01, bar.get_y() + bar.get_height()/2, 
+                f'{width:.3f}', ha='left', va='center', fontsize=8)
+    
+    # Plot 2: Mean frequency vs Significance
+    ax2.scatter(sorted_freqs, sorted_scores, s=60, alpha=0.7, color='coral')
+    for i, motif in enumerate(sorted_motifs):
+        ax2.annotate(motif, (sorted_freqs[i], sorted_scores[i]), 
+                    xytext=(5, 5), textcoords='offset points', fontsize=8)
+    
+    ax2.set_xlabel('Mean Frequency (per 1000 words)', fontsize=12)
+    ax2.set_ylabel('Significance Score', fontsize=12)
+    ax2.set_title('Frequency vs Significance', fontsize=14, fontweight='bold')
+    ax2.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    plt.savefig(f'{OUTPUT_PATH}/significance_ranking_25motifs.png', dpi=300, bbox_inches='tight')
+    plt.show()
+
+def create_cluster_visualization_25(motif_df_clustered, motifs, significance_scores):
+    """Create cluster visualization for 25 motifs"""
+    # PCA for visualization
+    pca = PCA(n_components=2)
+    X_pca = pca.fit_transform(motif_df_clustered[motifs])
+    
+    fig, axes = plt.subplots(2, 2, figsize=(16, 12))
+    
+    # Plot 1: PCA clusters
+    scatter = axes[0,0].scatter(X_pca[:, 0], X_pca[:, 1], 
+                              c=motif_df_clustered['cluster'], 
+                              cmap='viridis', s=60, alpha=0.7)
+    axes[0,0].set_xlabel(f'PC1 ({pca.explained_variance_ratio_[0]:.2%} variance)')
+    axes[0,0].set_ylabel(f'PC2 ({pca.explained_variance_ratio_[1]:.2%} variance)')
+    axes[0,0].set_title('Works Clustered by 25-Motif Patterns')
+    plt.colorbar(scatter, ax=axes[0,0], label='Cluster')
+    
+    # Plot 2: Clusters over time
+    for cluster_id in range(motif_df_clustered['cluster'].nunique()):
+        cluster_data = motif_df_clustered[motif_df_clustered['cluster'] == cluster_id]
+        axes[0,1].scatter(cluster_data['year'], [cluster_id] * len(cluster_data), 
+                         s=60, alpha=0.7, label=f'Cluster {cluster_id}')
+    axes[0,1].set_xlabel('Year')
+    axes[0,1].set_ylabel('Cluster')
+    axes[0,1].set_title('Cluster Distribution Over Time')
+    axes[0,1].legend()
+    axes[0,1].grid(True, alpha=0.3)
+    
+    # Plot 3: Top motifs by cluster
+    n_clusters = motif_df_clustered['cluster'].nunique()
+    cluster_means = []
+    for i in range(n_clusters):
+        cluster_data = motif_df_clustered[motif_df_clustered['cluster'] == i]
+        means = cluster_data[motifs].mean()
+        cluster_means.append(means)
+    
+    # Show top 5 motifs for each cluster
+    top_motifs_per_cluster = {}
+    for i, means in enumerate(cluster_means):
+        top_5 = means.nlargest(5)
+        top_motifs_per_cluster[i] = top_5
+    
+    # Create heatmap of top motifs per cluster
+    heatmap_data = []
+    all_top_motifs = set()
+    for cluster_motifs in top_motifs_per_cluster.values():
+        all_top_motifs.update(cluster_motifs.index)
+    
+    for motif in sorted(all_top_motifs):
+        row = []
+        for i in range(n_clusters):
+            if motif in top_motifs_per_cluster[i]:
+                row.append(top_motifs_per_cluster[i][motif])
+            else:
+                cluster_data = motif_df_clustered[motif_df_clustered['cluster'] == i]
+                row.append(cluster_data[motif].mean())
+        heatmap_data.append(row)
+    
+    sns.heatmap(heatmap_data, 
+                xticklabels=[f'Cluster {i}' for i in range(n_clusters)],
+                yticklabels=sorted(all_top_motifs),
+                annot=True, fmt='.2f', cmap='YlOrRd',
+                ax=axes[1,0])
+    axes[1,0].set_title('Top Motifs by Cluster')
+    
+    # Plot 4: Cluster composition over decades
+    motif_df_clustered['decade'] = (motif_df_clustered['year'] // 10) * 10
+    decade_cluster = pd.crosstab(motif_df_clustered['decade'], motif_df_clustered['cluster'], normalize='index')
+    decade_cluster.plot(kind='bar', stacked=True, ax=axes[1,1], colormap='viridis')
+    axes[1,1].set_title('Cluster Composition by Decade')
+    axes[1,1].set_xlabel('Decade')
+    axes[1,1].set_ylabel('Proportion')
+    axes[1,1].legend(title='Cluster', bbox_to_anchor=(1.05, 1), loc='upper left')
+    axes[1,1].tick_params(axis='x', rotation=45)
+    
+    plt.tight_layout()
+    plt.savefig(f'{OUTPUT_PATH}/cluster_analysis_25motifs.png', dpi=300, bbox_inches='tight')
+    plt.show()
+
+def create_network_visualization_25(correlation_matrix, significance_scores):
+    """Create network visualization for 25 motifs"""
+    G = nx.Graph()
+    
+    # Add nodes with significance as node size
+    for motif in correlation_matrix.index:
+        G.add_node(motif, significance=significance_scores[motif]['score'])
+    
+    # Add edges for strong correlations
+    threshold = 0.25  # Lower threshold for 25 motifs to show more connections
+    for i, motif1 in enumerate(correlation_matrix.index):
+        for j, motif2 in enumerate(correlation_matrix.columns):
+            if i < j and abs(correlation_matrix.iloc[i, j]) > threshold:
+                G.add_edge(motif1, motif2, 
+                          weight=abs(correlation_matrix.iloc[i, j]),
+                          correlation=correlation_matrix.iloc[i, j])
+    
+    plt.figure(figsize=(16, 12))
+    
+    # Position nodes using spring layout
+    pos = nx.spring_layout(G, k=2, iterations=50, seed=42)
+    
+    # Draw nodes with size based on significance
+    node_sizes = [significance_scores[node]['score'] * 3000 for node in G.nodes()]
+    node_colors = [significance_scores[node]['score'] for node in G.nodes()]
+    
+    nodes = nx.draw_networkx_nodes(G, pos, 
+                                  node_size=node_sizes,
+                                  node_color=node_colors,
+                                  cmap='YlOrRd',
+                                  alpha=0.8)
+    
+    # Draw edges with thickness based on correlation strength
+    edges = G.edges()
+    edge_weights = [G[u][v]['weight'] for u, v in edges]
+    edge_colors = ['red' if G[u][v]['correlation'] > 0 else 'blue' for u, v in edges]
+    
+    nx.draw_networkx_edges(G, pos,
+                          width=[w*4 for w in edge_weights],
+                          edge_color=edge_colors,
+                          alpha=0.6)
+    
+    # Draw labels
+    nx.draw_networkx_labels(G, pos, font_size=9, font_weight='bold')
+    
+    plt.title('25-Motif Relationship Network\n(Node size = significance, Edge thickness = correlation strength)', 
+              fontsize=14, fontweight='bold')
+    plt.axis('off')
+    
+    # Add colorbar for node significance
+    plt.colorbar(nodes, label='Significance Score')
+    
+    plt.tight_layout()
+    plt.savefig(f'{OUTPUT_PATH}/motif_network_25motifs.png', dpi=300, bbox_inches='tight')
+    plt.show()
+
+def create_critical_points_visualization_25(critical_points, evolution_data, significance_scores):
+    """Create comprehensive critical points visualization for 25 motifs"""
+    
+    # Sort motifs by significance for better visualization
+    sorted_motifs = sorted(critical_points.keys(), 
+                          key=lambda x: significance_scores[x]['score'], reverse=True)
+    
+    # Create comprehensive figure with multiple subplots
+    fig = plt.figure(figsize=(20, 16))
+    
+    # Define grid layout: 2 rows, 3 columns for different analysis views
+    gs = fig.add_gridspec(3, 3, height_ratios=[2, 1, 1], width_ratios=[2, 1, 1])
+    
+    # Main plot: Top 12 motifs with critical points marked
+    ax_main = fig.add_subplot(gs[0, :])
+    
+    # Select top 12 motifs for detailed timeline
+    top_motifs = sorted_motifs[:12]
+    colors = plt.cm.Set3(np.linspace(0, 1, len(top_motifs)))
+    
+    for i, motif in enumerate(top_motifs):
+        years = evolution_data[motif]['years']
+        frequencies = evolution_data[motif]['frequencies']
+        rolling_mean = evolution_data[motif]['rolling_mean']
+        
+        # Plot trend line
+        ax_main.plot(years, rolling_mean, color=colors[i], linewidth=2, 
+                    label=f'{motif} (sig: {significance_scores[motif]["score"]:.2f})', alpha=0.8)
+        
+        # Mark critical points
+        if critical_points[motif]['years']:
+            crit_years = critical_points[motif]['years']
+            crit_values = critical_points[motif]['values']
+            ax_main.scatter(crit_years, crit_values, color=colors[i], s=80, 
+                           marker='X', edgecolors='black', linewidth=1, alpha=0.9)
+    
+    ax_main.set_xlabel('Year', fontsize=12)
+    ax_main.set_ylabel('Frequency (per 1000 words)', fontsize=12)
+    ax_main.set_title('Critical Points in Motif Evolution (Top 12 Motifs by Significance)', 
+                     fontsize=14, fontweight='bold')
+    ax_main.legend(bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=8)
+    ax_main.grid(True, alpha=0.3)
+    
+    # Subplot 1: Critical points frequency by year
+    ax1 = fig.add_subplot(gs[1, 0])
+    
+    all_critical_years = []
+    for motif_data in critical_points.values():
+        all_critical_years.extend(motif_data['years'])
+    
+    if all_critical_years:
+        year_counts = Counter(all_critical_years)
+        years_sorted = sorted(year_counts.keys())
+        counts = [year_counts[year] for year in years_sorted]
+        
+        bars = ax1.bar(years_sorted, counts, alpha=0.7, color='coral')
+        ax1.set_xlabel('Year', fontsize=10)
+        ax1.set_ylabel('Number of Critical Points', fontsize=10)
+        ax1.set_title('Critical Points Distribution by Year', fontsize=12, fontweight='bold')
+        ax1.grid(True, alpha=0.3)
+        
+        # Highlight years with most changes
+        max_changes = max(counts) if counts else 0
+        for bar, count in zip(bars, counts):
+            if count >= max_changes * 0.8:  # Top 20% of years
+                bar.set_color('red')
+                bar.set_alpha(0.9)
+    
+    # Subplot 2: Critical points by motif category
+    ax2 = fig.add_subplot(gs[1, 1])
+    
+    # Categorize motifs
+    categories = {
+        'Crime': ['murder', 'death', 'kill', 'poison', 'shot', 'victim'],
+        'Investigation': ['detective', 'inspector', 'police', 'evidence', 'witness'],
+        'Psychology': ['fear', 'mysterious', 'strange', 'nervous'],
+        'Setting': ['room', 'house', 'door', 'window', 'night'],
+        'People': ['husband', 'wife', 'lover', 'friend', 'suspect'],
+        'Other': []
+    }
+    
+    # Count critical points by category
+    category_counts = {cat: 0 for cat in categories.keys()}
+    
+    for motif, data in critical_points.items():
+        categorized = False
+        for cat, keywords in categories.items():
+            if cat != 'Other' and any(keyword in motif.lower() for keyword in keywords):
+                category_counts[cat] += len(data['years'])
+                categorized = True
+                break
+        if not categorized:
+            category_counts['Other'] += len(data['years'])
+    
+    # Create pie chart
+    sizes = [count for count in category_counts.values() if count > 0]
+    labels = [cat for cat, count in category_counts.items() if count > 0]
+    colors_pie = plt.cm.Pastel1(np.linspace(0, 1, len(labels)))
+    
+    ax2.pie(sizes, labels=labels, autopct='%1.1f%%', colors=colors_pie, startangle=90)
+    ax2.set_title('Critical Points by\nMotif Category', fontsize=12, fontweight='bold')
+    
+    # Subplot 3: Decade analysis
+    ax3 = fig.add_subplot(gs[1, 2])
+    
+    decade_counts = defaultdict(int)
+    for year in all_critical_years:
+        decade = (year // 10) * 10
+        decade_counts[decade] += 1
+    
+    if decade_counts:
+        decades = sorted(decade_counts.keys())
+        decade_values = [decade_counts[d] for d in decades]
+        
+        ax3.bar([f"{d}s" for d in decades], decade_values, alpha=0.7, color='lightgreen')
+        ax3.set_xlabel('Decade', fontsize=10)
+        ax3.set_ylabel('Critical Points', fontsize=10)
+        ax3.set_title('Critical Points by Decade', fontsize=12, fontweight='bold')
+        ax3.tick_params(axis='x', rotation=45)
+        ax3.grid(True, alpha=0.3)
+    
+    # Subplot 4: Gradient magnitude analysis
+    ax4 = fig.add_subplot(gs[2, 0])
+    
+    # Collect all gradient magnitudes
+    all_gradients = []
+    motif_gradient_stats = {}
+    
+    for motif, data in critical_points.items():
+        if data['gradient']:
+            gradients = [abs(g) for g in data['gradient']]
+            all_gradients.extend(gradients)
+            motif_gradient_stats[motif] = {
+                'mean_gradient': np.mean(gradients),
+                'max_gradient': max(gradients),
+                'count': len(gradients)
+            }
+    
+    if motif_gradient_stats:
+        # Show top motifs by gradient magnitude
+        top_gradient_motifs = sorted(motif_gradient_stats.items(), 
+                                   key=lambda x: x[1]['mean_gradient'], reverse=True)[:8]
+        
+        motifs_grad = [item[0] for item in top_gradient_motifs]
+        mean_grads = [item[1]['mean_gradient'] for item in top_gradient_motifs]
+        
+        bars = ax4.barh(range(len(motifs_grad)), mean_grads, alpha=0.7, color='gold')
+        ax4.set_yticks(range(len(motifs_grad)))
+        ax4.set_yticklabels(motifs_grad, fontsize=9)
+        ax4.set_xlabel('Mean Gradient Magnitude', fontsize=10)
+        ax4.set_title('Motifs with Highest\nChange Intensity', fontsize=12, fontweight='bold')
+        ax4.grid(True, alpha=0.3)
+    
+    # Subplot 5: Timeline heatmap
+    ax5 = fig.add_subplot(gs[2, 1:])
+    
+    # Create a heatmap showing which motifs have critical points in which years
+    if all_critical_years:
+        year_range = range(min(all_critical_years), max(all_critical_years) + 1)
+        heatmap_data = []
+        heatmap_motifs = []
+        
+        # Select motifs with most critical points for heatmap
+        motif_cp_counts = {motif: len(data['years']) for motif, data in critical_points.items()}
+        top_cp_motifs = sorted(motif_cp_counts.items(), key=lambda x: x[1], reverse=True)[:10]
+        
+        for motif, _ in top_cp_motifs:
+            row = []
+            motif_years = set(critical_points[motif]['years'])
+            for year in year_range:
+                row.append(1 if year in motif_years else 0)
+            heatmap_data.append(row)
+            heatmap_motifs.append(motif)
+        
+        if heatmap_data:
+            im = ax5.imshow(heatmap_data, cmap='Reds', aspect='auto', alpha=0.8)
+            
+            # Set ticks and labels
+            ax5.set_xticks(range(0, len(year_range), 5))
+            ax5.set_xticklabels([str(year_range[i]) for i in range(0, len(year_range), 5)], 
+                               rotation=45, fontsize=8)
+            ax5.set_yticks(range(len(heatmap_motifs)))
+            ax5.set_yticklabels(heatmap_motifs, fontsize=9)
+            ax5.set_xlabel('Year', fontsize=10)
+            ax5.set_title('Critical Points Timeline Heatmap\n(Top 10 Motifs by Critical Point Count)', 
+                         fontsize=12, fontweight='bold')
+            
+            # Add colorbar
+            cbar = plt.colorbar(im, ax=ax5, fraction=0.02)
+            cbar.set_label('Critical Point Present', fontsize=8)
+    
+    plt.tight_layout()
+    plt.savefig(f'{OUTPUT_PATH}/critical_points_analysis_25motifs.png', dpi=300, bbox_inches='tight')
+    plt.show()
+    
+    # Print summary statistics
+    print("\nCritical Points Analysis Summary:")
+    print("=" * 50)
+    
+    if all_critical_years:
+        print(f"Total critical points detected: {len(all_critical_years)}")
+        print(f"Years with critical points: {len(set(all_critical_years))}")
+        print(f"Average critical points per year: {len(all_critical_years) / len(set(all_critical_years)):.1f}")
+        
+        # Most active years
+        year_counts = Counter(all_critical_years)
+        most_active = year_counts.most_common(5)
+        print(f"\nMost active years:")
+        for year, count in most_active:
+            print(f"  {year}: {count} critical points")
+        
+        # Most volatile motifs
+        if motif_gradient_stats:
+            print(f"\nMost volatile motifs (by mean gradient):")
+            for motif, count in top_gradient_motifs[:5]:
+                stats = motif_gradient_stats[motif]
+                print(f"  {motif}: {stats['mean_gradient']:.3f} (from {stats['count']} points)")
+    
+    print("=" * 50)
+
+# ============================================================================
+# 6. COMPREHENSIVE REPORT GENERATION
+# ============================================================================
+
+def generate_comprehensive_report_25(motif_df, motifs, significance_scores, evolution_data, 
+                                    correlation_matrix, critical_points, cluster_analysis):
+    """Generate comprehensive analysis report for 25 motifs"""
+    
+    report = []
+    report.append("=" * 80)
+    report.append("AGATHA CHRISTIE 25-MOTIF EVOLUTION ANALYSIS REPORT")
+    report.append("Self-Organizing Patterns in Detective Fiction (1920-1976)")
+    report.append("=" * 80)
+    report.append("")
+    
+    # Dataset overview
+    report.append("1. DATASET OVERVIEW")
+    report.append("-" * 40)
+    report.append(f"Total works analyzed: {len(motif_df)}")
+    report.append(f"Time span: {motif_df['year'].min()}-{motif_df['year'].max()}")
+    total_words = sum([len(text.split()) for text in texts_df['text']])
+    report.append(f"Total words analyzed: {total_words:,}")
+    report.append(f"Average words per work: {total_words // len(texts_df):,}")
+    report.append(f"Motifs analyzed: {len(motifs)}")
+    report.append("")
+    
+    # Top motifs by significance
+    sorted_motifs = sorted(significance_scores.items(), key=lambda x: x[1]['score'], reverse=True)
+    
+    report.append("2. TOP 25 MOTIFS BY SIGNIFICANCE SCORE")
+    report.append("-" * 40)
+    report.append("Rank | Motif          | Sig.Score | Avg.Freq | CV    | TimeCorr | Presence")
+    report.append("-----|----------------|-----------|----------|-------|----------|----------")
+    
+    for i, (motif, data) in enumerate(sorted_motifs, 1):
+        score = data['score']
+        freq = data['mean_freq']
+        cv = data['cv']
+        time_corr = data['time_corr']
+        presence = data['presence_rate']
+        
+        report.append(f"{i:2d}   | {motif:<14} | {score:7.3f}   | {freq:6.2f}   | {cv:5.2f} | {time_corr:6.3f}   | {presence:6.2f}")
+    
+    report.append("")
+    report.append("Legend:")
+    report.append("- Sig.Score: Composite significance (0-1 scale)")
+    report.append("- Avg.Freq: Average frequency per 1000 words")
+    report.append("- CV: Coefficient of variation (lower = more stable)")
+    report.append("- TimeCorr: Absolute correlation with time (higher = stronger trend)")
+    report.append("- Presence: Proportion of works containing this motif")
+    report.append("")
+    
+    # Motif categories analysis
+    report.append("3. MOTIF CATEGORY ANALYSIS")
+    report.append("-" * 40)
+    
+    categories = {
+        'Core Crime': ['murder', 'death', 'kill', 'poison', 'shot', 'victim', 'corpse', 'body'],
+        'Investigation': ['detective', 'inspector', 'police', 'evidence', 'witness', 'clue', 'crime'],
+        'People & Relations': ['suspect', 'husband', 'wife', 'lover', 'friend', 'butler', 'servant'],
+        'Motives & Background': ['money', 'secret', 'motive', 'inheritance', 'blackmail', 'revenge'],
+        'Settings & Objects': ['room', 'house', 'door', 'window', 'letter', 'key', 'weapon'],
+        'Psychology & Atmosphere': ['fear', 'mysterious', 'strange', 'dark', 'night', 'nervous']
+    }
+    
+    for category, keywords in categories.items():
+        category_motifs = [m for m in motifs if any(k in m.lower() for k in keywords)]
+        if category_motifs:
+            avg_significance = np.mean([significance_scores[m]['score'] for m in category_motifs])
+            avg_frequency = np.mean([significance_scores[m]['mean_freq'] for m in category_motifs])
+            
+            report.append(f"{category}:")
+            report.append(f"  Motifs ({len(category_motifs)}): {', '.join(category_motifs)}")
+            report.append(f"  Average significance: {avg_significance:.3f}")
+            report.append(f"  Average frequency: {avg_frequency:.2f} per 1000 words")
+            report.append("")
+    
+    # Temporal evolution patterns
+    report.append("4. TEMPORAL EVOLUTION PATTERNS")
+    report.append("-" * 40)
+    
+    # Define periods
+    early_period = motif_df[motif_df['year'] <= 1935]
+    middle_period = motif_df[(motif_df['year'] > 1935) & (motif_df['year'] <= 1955)]
+    late_period = motif_df[motif_df['year'] > 1955]
+    
+    period_analysis = []
+    for motif in sorted_motifs[:10]:  # Top 10 motifs
+        motif_name = motif[0]
+        early_mean = early_period[motif_name].mean() if len(early_period) > 0 else 0
+        middle_mean = middle_period[motif_name].mean() if len(middle_period) > 0 else 0
+        late_mean = late_period[motif_name].mean() if len(late_period) > 0 else 0
+        
+        # Calculate overall trend
+        if early_mean > 0:
+            trend_percent = ((late_mean - early_mean) / early_mean) * 100
+        else:
+            trend_percent = 0
+        
+        trend_direction = "↗" if trend_percent > 15 else "↘" if trend_percent < -15 else "→"
+        
+        period_analysis.append({
+            'motif': motif_name,
+            'early': early_mean,
+            'middle': middle_mean,
+            'late': late_mean,
+            'trend_percent': trend_percent,
+            'trend_direction': trend_direction
+        })
+    
+    report.append("Top 10 Motifs - Temporal Evolution:")
+    report.append("Motif           | Early   | Middle  | Late    | Trend    | Direction")
+    report.append("----------------|---------|---------|---------|----------|----------")
+    
+    for analysis in period_analysis:
+        motif = analysis['motif']
+        early = analysis['early']
+        middle = analysis['middle']
+        late = analysis['late']
+        trend = analysis['trend_percent']
+        direction = analysis['trend_direction']
+        
+        report.append(f"{motif:<15} | {early:5.2f}   | {middle:5.2f}   | {late:5.2f}   | {trend:+6.1f}%  | {direction}")
+    
+    report.append("")
+    
+    # Strong correlations
+    report.append("5. STRONGEST MOTIF CORRELATIONS")
+    report.append("-" * 40)
+    
+    correlations = []
+    for i, motif1 in enumerate(motifs):
+        for j, motif2 in enumerate(motifs):
+            if i < j:
+                corr = correlation_matrix.loc[motif1, motif2]
+                if abs(corr) > 0.3:
+                    correlations.append((motif1, motif2, corr))
+    
+    correlations.sort(key=lambda x: abs(x[2]), reverse=True)
+    
+    report.append("Correlations > |0.30|:")
+    for motif1, motif2, corr in correlations[:15]:  # Top 15 correlations
+        direction = "+" if corr > 0 else "-"
+        report.append(f"  {motif1} ↔ {motif2}: {direction}{abs(corr):.3f}")
+    
+    report.append("")
+    
+    # Cluster analysis
+    report.append("6. CLUSTER ANALYSIS (5 CLUSTERS)")
+    report.append("-" * 40)
+    
+    for cluster_id, data in cluster_analysis.items():
+        year_range = f"{min(data['years'])}-{max(data['years'])}" if data['years'] else "N/A"
+        
+        # Get top 3 motifs for this cluster
+        motif_means = data['motif_means']
+        top_motifs = sorted(motif_means.items(), key=lambda x: x[1], reverse=True)[:3]
+        
+        report.append(f"Cluster {cluster_id}: {data['count']} works ({year_range})")
+        report.append(f"  Dominant motifs:")
+        for motif, freq in top_motifs:
+            report.append(f"    {motif}: {freq:.2f} per 1000 words")
+        
+        # Sample works
+        sample_titles = data['titles'][:3] if len(data['titles']) >= 3 else data['titles']
+        report.append(f"  Sample works: {', '.join(sample_titles)}")
+        report.append("")
+    
+    # Critical periods
+    report.append("7. CRITICAL PERIODS AND TRANSITIONS")
+    report.append("-" * 40)
+    
+    # Count critical points by year
+    all_critical_years = []
+    for motif, data in critical_points.items():
+        all_critical_years.extend(data['years'])
+    
+    if all_critical_years:
+        year_counts = Counter(all_critical_years)
+        critical_periods = sorted(year_counts.items(), key=lambda x: x[1], reverse=True)
+        
+        report.append("Years with most motif transitions:")
+        for year, count in critical_periods[:8]:
+            report.append(f"  {year}: {count} motifs showed significant change")
+        
+        # Analyze decades
+        decade_changes = defaultdict(int)
+        for year in all_critical_years:
+            decade = (year // 10) * 10
+            decade_changes[decade] += 1
+        
+        report.append("")
+        report.append("Critical transitions by decade:")
+        for decade in sorted(decade_changes.keys()):
+            report.append(f"  {decade}s: {decade_changes[decade]} transitions")
+    
+    report.append("")
+    
+    # Self-organization evidence
+    report.append("8. SELF-ORGANIZATION EVIDENCE")
+    report.append("-" * 40)
+    
+    # Calculate entropy for different periods
+    periods = [
+        (1920, 1935, "Early"),
+        (1936, 1955, "Middle"), 
+        (1956, 1976, "Late")
+    ]
+    
+    entropies = []
+    for start, end, name in periods:
+        period_data = motif_df[(motif_df['year'] >= start) & (motif_df['year'] <= end)]
+        if len(period_data) > 0:
+            motif_sums = period_data[motifs].sum()
+            motif_probs = motif_sums / motif_sums.sum()
+            entropy = -np.sum(motif_probs * np.log2(motif_probs + 1e-10))
+            entropies.append((name, entropy))
+            report.append(f"{name} period entropy: {entropy:.3f}")
+    
+    # Calculate motif diversity trends
+    report.append("")
+    report.append("Motif diversity metrics:")
+    
+    # Number of active motifs per period (frequency > 0.05)
+    for start, end, name in periods:
+        period_data = motif_df[(motif_df['year'] >= start) & (motif_df['year'] <= end)]
+        if len(period_data) > 0:
+            active_motifs = sum(period_data[motifs].mean() > 0.05)
+            report.append(f"{name} period active motifs (>0.05 freq): {active_motifs}/{len(motifs)}")
+    
+    report.append("")
+    
+    # Key findings and conclusions
+    report.append("9. KEY FINDINGS AND CONCLUSIONS")
+    report.append("-" * 40)
+    
+    # Calculate some summary statistics
+    high_significance = [m for m, data in significance_scores.items() if data['score'] > 0.4]
+    evolving_motifs = [m for m, data in significance_scores.items() if data['time_corr'] > 0.3]
+    stable_motifs = [m for m, data in significance_scores.items() if data['cv'] < 0.5]
+    
+    report.append("Summary Statistics:")
+    report.append(f"• High-significance motifs (>0.4): {len(high_significance)} of {len(motifs)}")
+    report.append(f"• Strongly evolving motifs (time corr >0.3): {len(evolving_motifs)}")
+    report.append(f"• Stable motifs (CV <0.5): {len(stable_motifs)}")
+    report.append(f"• Strong correlations (>|0.3|): {len([c for c in correlations if abs(c[2]) > 0.3])}")
+    report.append("")
+    
+    
+    return "\n".join(report)
+
+def save_detailed_data_25(motif_df, correlation_matrix, motif_df_clustered, 
+                         critical_points, significance_scores):
+    """Save all analysis data to CSV files"""
+    
+    # Save motif frequencies
+    motif_df.to_csv(f'{OUTPUT_PATH}/motif_frequencies_25.csv', index=False)
+    print("Saved: motif_frequencies_25.csv")
+    
+    # Save correlation matrix
+    correlation_matrix.to_csv(f'{OUTPUT_PATH}/motif_correlations_25.csv')
+    print("Saved: motif_correlations_25.csv")
+    
+    # Save cluster assignments
+    motif_df_clustered.to_csv(f'{OUTPUT_PATH}/cluster_assignments_25.csv', index=False)
+    print("Saved: cluster_assignments_25.csv")
+    
+    # Save significance scores
+    significance_df = pd.DataFrame.from_dict(significance_scores, orient='index')
+    significance_df.to_csv(f'{OUTPUT_PATH}/significance_scores_25.csv')
+    print("Saved: significance_scores_25.csv")
+    
+    # Save critical points
+    critical_points_data = []
+    for motif, data in critical_points.items():
+        for year, value, gradient in zip(data['years'], data['values'], data['gradient']):
+            critical_points_data.append({
+                'motif': motif,
+                'year': year,
+                'frequency': value,
+                'gradient': gradient
+            })
+    
+    if critical_points_data:
+        pd.DataFrame(critical_points_data).to_csv(f'{OUTPUT_PATH}/critical_points_25.csv', index=False)
+        print("Saved: critical_points_25.csv")
+    
+    # Save summary statistics
+    summary_stats = []
+    for motif, data in significance_scores.items():
+        stats_data = {
+            'motif': motif,
+            'significance_score': data['score'],
+            'mean_frequency': data['mean_freq'],
+            'std_frequency': motif_df[motif].std(),
+            'coefficient_variation': data['cv'],
+            'time_correlation': data['time_corr'],
+            'dynamic_range': data['dynamic_range'],
+            'presence_rate': data['presence_rate'],
+            'min_frequency': motif_df[motif].min(),
+            'max_frequency': motif_df[motif].max()
+        }
+        summary_stats.append(stats_data)
+    
+    pd.DataFrame(summary_stats).to_csv(f'{OUTPUT_PATH}/summary_statistics_25.csv', index=False)
+    print("Saved: summary_statistics_25.csv")
+
+# ============================================================================
+# 7. MAIN EXECUTION
+# ============================================================================
+
+def run_complete_25motif_analysis():
+    """Run the complete 25-motif analysis"""
+    
+    print("\n" + "="*60)
+    print("STARTING 25-MOTIF ANALYSIS")
+    print("="*60)
+    
+    # Step 1: Discover 25 motifs
+    print("\n1. Discovering 25 key motifs...")
+    discovered_motifs_25 = discover_detective_motifs_25(texts_df, top_n=25)
+    
+    # Step 2: Extract frequencies
+    print("\n2. Extracting motif frequencies...")
+    motif_df_25 = extract_motif_frequencies(texts_df, discovered_motifs_25)
+    
+    # Step 3: Analyze significance
+    print("\n3. Analyzing motif significance...")
+    significance_scores_25 = analyze_motif_significance(motif_df_25, discovered_motifs_25)
+    
+    # Step 4: Temporal evolution
+    print("\n4. Analyzing temporal evolution...")
+    evolution_data_25 = analyze_temporal_evolution(motif_df_25, discovered_motifs_25)
+    
+    # Step 5: Correlations
+    print("\n5. Calculating correlations...")
+    correlation_matrix_25 = calculate_motif_correlations(motif_df_25, discovered_motifs_25)
+    
+    # Step 6: Critical points
+    print("\n6. Detecting critical points...")
+    critical_points_25 = detect_critical_points(motif_df_25, discovered_motifs_25)
+    
+    # Step 7: Clustering
+    print("\n7. Performing cluster analysis...")
+    motif_df_clustered_25, cluster_analysis_25, kmeans_25 = analyze_motif_clusters(
+        motif_df_25, discovered_motifs_25, n_clusters=5)
+    
+    # Step 8: Visualizations
+    print("\n8. Creating visualizations...")
+    create_temporal_evolution_plot_25(evolution_data_25, discovered_motifs_25, significance_scores_25)
+    create_correlation_heatmap_25(correlation_matrix_25, significance_scores_25)
+    create_significance_ranking_plot(significance_scores_25)
+    create_cluster_visualization_25(motif_df_clustered_25, discovered_motifs_25, significance_scores_25)
+    create_network_visualization_25(correlation_matrix_25, significance_scores_25)
+    create_critical_points_visualization_25(critical_points_25, evolution_data_25, significance_scores_25)
+    
+    # Step 9: Generate report
+    print("\n9. Generating comprehensive report...")
+    report_25 = generate_comprehensive_report_25(
+        motif_df_25, discovered_motifs_25, significance_scores_25, 
+        evolution_data_25, correlation_matrix_25, critical_points_25, cluster_analysis_25
+    )
+    
+    # Step 10: Save everything
+    print("\n10. Saving all data and results...")
+    
+    # Save text report
+    with open(f'{OUTPUT_PATH}/comprehensive_report_25motifs.txt', 'w', encoding='utf-8') as f:
+        f.write(report_25)
+    print("Saved: comprehensive_report_25motifs.txt")
+    
+    # Save all CSV data
+    save_detailed_data_25(motif_df_25, correlation_matrix_25, motif_df_clustered_25, 
+                         critical_points_25, significance_scores_25)
+    
+    print(f"\n" + "="*60)
+    print("25-MOTIF ANALYSIS COMPLETED!")
+    print("="*60)
+    print(f"\nAll results saved to: {OUTPUT_PATH}")
+    print("\nGenerated files:")
+    print("- comprehensive_report_25motifs.txt: Full analysis report")
+    print("- motif_frequencies_25.csv: Raw frequency data")
+    print("- motif_correlations_25.csv: Correlation matrix")
+    print("- cluster_assignments_25.csv: Work cluster assignments")
+    print("- significance_scores_25.csv: Motif significance analysis")
+    print("- critical_points_25.csv: Critical transition points")
+    print("- summary_statistics_25.csv: Complete statistical summary")
+    print("- temporal_evolution_25motifs.png: Time series analysis")
+    print("- correlation_heatmap_25motifs.png: Correlation visualization")
+    print("- significance_ranking_25motifs.png: Significance analysis")
+    print("- cluster_analysis_25motifs.png: Cluster visualization")
+    print("- motif_network_25motifs.png: Network relationship diagram")
+    print("- critical_points_analysis_25motifs.png: Critical points comprehensive analysis")
+    
+    # Display sample results
+    print("\n" + "="*60)
+    print("SAMPLE RESULTS PREVIEW")
+    print("="*60)
+    
+    print("\nTop 10 Motifs by Significance:")
+    sorted_significance = sorted(significance_scores_25.items(), 
+                               key=lambda x: x[1]['score'], reverse=True)
+    for i, (motif, data) in enumerate(sorted_significance[:10], 1):
+        print(f"{i:2d}. {motif:<15} (Score: {data['score']:.3f}, Freq: {data['mean_freq']:.2f})")
+    
+    print(f"\nStrongest Correlations:")
+    correlations = []
+    for i, motif1 in enumerate(discovered_motifs_25):
+        for j, motif2 in enumerate(discovered_motifs_25):
+            if i < j:
+                corr = correlation_matrix_25.loc[motif1, motif2]
+                if abs(corr) > 0.4:
+                    correlations.append((motif1, motif2, corr))
+    
+    correlations.sort(key=lambda x: abs(x[2]), reverse=True)
+    for motif1, motif2, corr in correlations[:5]:
+        print(f"  {motif1} ↔ {motif2}: {corr:+.3f}")
+    
+    print(f"\nCluster Summary:")
+    for cluster_id, data in cluster_analysis_25.items():
+        year_range = f"{min(data['years'])}-{max(data['years'])}" if data['years'] else "N/A"
+        print(f"  Cluster {cluster_id}: {data['count']} works ({year_range})")
+    
+    print("\n" + "="*60)
+    print("ANALYSIS COMPLETED")
+    print("="*60)
+    
+    return {
+        'motifs': discovered_motifs_25,
+        'motif_df': motif_df_25,
+        'significance_scores': significance_scores_25,
+        'evolution_data': evolution_data_25,
+        'correlation_matrix': correlation_matrix_25,
+        'critical_points': critical_points_25,
+        'cluster_analysis': cluster_analysis_25,
+        'report': report_25
+    }
+
+# Execute the complete analysis
+if __name__ == "__main__":
+    results = run_complete_25motif_analysis()

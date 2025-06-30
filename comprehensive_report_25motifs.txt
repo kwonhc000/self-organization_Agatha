@@ -1,0 +1,226 @@
+================================================================================
+AGATHA CHRISTIE 25-MOTIF EVOLUTION ANALYSIS REPORT
+Enhanced Self-Organizing Patterns in Detective Fiction (1920-1976)
+================================================================================
+
+1. DATASET OVERVIEW
+----------------------------------------
+Total works analyzed: 66
+Time span: 1920-1976
+Total words analyzed: 4,243,056
+Average words per work: 64,288
+Motifs analyzed: 25
+
+2. TOP 25 MOTIFS BY SIGNIFICANCE SCORE
+----------------------------------------
+Rank | Motif          | Sig.Score | Avg.Freq | CV    | TimeCorr | Presence
+-----|----------------|-----------|----------|-------|----------|----------
+ 1   | garden         |   0.528   |   0.22   |  0.99 |  0.412   |   0.94
+ 2   | murderer       |   0.505   |   0.21   |  0.93 |  0.247   |   0.86
+ 3   | accident       |   0.435   |   0.15   |  0.98 |  0.172   |   0.94
+ 4   | study          |   0.419   |   0.09   |  1.50 |  0.211   |   0.92
+ 5   | motive         |   0.417   |   0.15   |  0.83 |  0.251   |   0.94
+ 6   | suicide        |   0.402   |   0.11   |  1.64 |  0.142   |   0.82
+ 7   | frightened     |   0.397   |   0.09   |  0.77 |  0.365   |   0.92
+ 8   | guilty         |   0.370   |   0.08   |  0.95 |  0.222   |   0.92
+ 9   | locked         |   0.363   |   0.07   |  1.18 |  0.348   |   0.82
+10   | clue           |   0.345   |   0.07   |  0.98 |  0.211   |   0.86
+11   | key            |   0.344   |   0.09   |  1.05 |  0.133   |   0.89
+12   | alibi          |   0.332   |   0.06   |  1.56 |  0.276   |   0.76
+13   | servant        |   0.327   |   0.04   |  1.35 |  0.379   |   0.76
+14   | poison         |   0.318   |   0.10   |  1.36 |  0.067   |   0.71
+15   | criminal       |   0.317   |   0.07   |  0.77 |  0.070   |   0.85
+16   | butler         |   0.313   |   0.07   |  1.87 |  0.124   |   0.62
+17   | victim         |   0.304   |   0.06   |  1.04 |  0.106   |   0.85
+18   | knife          |   0.292   |   0.05   |  1.54 |  0.091   |   0.77
+19   | accused        |   0.277   |   0.03   |  2.34 |  0.161   |   0.62
+20   | weapon         |   0.263   |   0.03   |  1.42 |  0.247   |   0.64
+21   | enemy          |   0.258   |   0.04   |  1.83 |  0.053   |   0.64
+22   | blackmail      |   0.248   |   0.03   |  1.34 |  0.162   |   0.62
+23   | nephew         |   0.228   |   0.04   |  1.50 |  0.104   |   0.53
+24   | jealousy       |   0.220   |   0.03   |  1.30 |  0.089   |   0.58
+25   | niece          |   0.208   |   0.04   |  1.71 |  0.044   |   0.47
+
+Legend:
+- Sig.Score: Composite significance (0-1 scale)
+- Avg.Freq: Average frequency per 1000 words
+- CV: Coefficient of variation (lower = more stable)
+- TimeCorr: Absolute correlation with time (higher = stronger trend)
+- Presence: Proportion of works containing this motif
+
+3. MOTIF CATEGORY ANALYSIS
+----------------------------------------
+Core Crime:
+  Motifs (3): poison, victim, murderer
+  Average significance: 0.376
+  Average frequency: 0.12 per 1000 words
+
+Investigation:
+  Motifs (1): clue
+  Average significance: 0.345
+  Average frequency: 0.07 per 1000 words
+
+People & Relations:
+  Motifs (2): butler, servant
+  Average significance: 0.320
+  Average frequency: 0.06 per 1000 words
+
+Motives & Background:
+  Motifs (2): motive, blackmail
+  Average significance: 0.333
+  Average frequency: 0.09 per 1000 words
+
+Settings & Objects:
+  Motifs (2): weapon, key
+  Average significance: 0.304
+  Average frequency: 0.06 per 1000 words
+
+4. TEMPORAL EVOLUTION PATTERNS
+----------------------------------------
+Top 10 Motifs - Temporal Evolution:
+Motif           | Early   | Middle  | Late    | Trend    | Direction
+----------------|---------|---------|---------|----------|----------
+garden          |  0.15   |  0.17   |  0.35   | +124.5%  | ↗
+murderer        |  0.26   |  0.21   |  0.16   |  -37.4%  | ↘
+accident        |  0.15   |  0.12   |  0.19   |  +23.5%  | ↗
+study           |  0.17   |  0.08   |  0.06   |  -67.5%  | ↘
+motive          |  0.17   |  0.16   |  0.09   |  -45.8%  | ↘
+suicide         |  0.06   |  0.13   |  0.12   |  +86.8%  | ↗
+frightened      |  0.06   |  0.09   |  0.11   |  +92.8%  | ↗
+guilty          |  0.09   |  0.10   |  0.05   |  -42.6%  | ↘
+locked          |  0.10   |  0.06   |  0.03   |  -71.4%  | ↘
+clue            |  0.11   |  0.04   |  0.07   |  -36.5%  | ↘
+
+5. STRONGEST MOTIF CORRELATIONS
+----------------------------------------
+Correlations > |0.30|:
+  accused ↔ guilty: +0.648
+  locked ↔ key: +0.550
+  victim ↔ murderer: +0.481
+  guilty ↔ motive: +0.456
+  victim ↔ clue: +0.433
+  knife ↔ murderer: +0.424
+  murderer ↔ motive: +0.408
+  nephew ↔ study: +0.407
+  weapon ↔ locked: +0.394
+  weapon ↔ murderer: +0.376
+  murderer ↔ alibi: +0.373
+  suicide ↔ jealousy: +0.344
+  accused ↔ motive: +0.339
+  butler ↔ motive: +0.334
+  servant ↔ enemy: +0.333
+
+6. CLUSTER ANALYSIS (5 CLUSTERS)
+----------------------------------------
+Cluster 0: 5 works (1963-1976)
+  Dominant motifs:
+    garden: 0.82 per 1000 words
+    accident: 0.22 per 1000 words
+    murderer: 0.15 per 1000 words
+  Sample works: The Clocks, Hallowe'en Party, Nemesis
+
+Cluster 1: 23 works (1920-1975)
+  Dominant motifs:
+    murderer: 0.39 per 1000 words
+    motive: 0.25 per 1000 words
+    garden: 0.14 per 1000 words
+  Sample works: The Mysterious Affair at Styles, The Murder on the Links, The Sittaford Mystery
+
+Cluster 2: 3 works (1926-1952)
+  Dominant motifs:
+    study: 0.68 per 1000 words
+    garden: 0.28 per 1000 words
+    murderer: 0.27 per 1000 words
+  Sample works: The Murder of Roger Ackroyd, The Murder at the Vicarage, They Do It with Mirrors
+
+Cluster 3: 2 works (1945-1972)
+  Dominant motifs:
+    suicide: 0.92 per 1000 words
+    accident: 0.25 per 1000 words
+    motive: 0.22 per 1000 words
+  Sample works: Sparkling Cyanide, Elephants Can Remember
+
+Cluster 4: 33 works (1922-1970)
+  Dominant motifs:
+    garden: 0.18 per 1000 words
+    accident: 0.16 per 1000 words
+    poison: 0.10 per 1000 words
+  Sample works: The Secret Adversary, The Man in the Brown Suit, The Secret of Chimneys
+
+7. CRITICAL PERIODS AND TRANSITIONS
+----------------------------------------
+Years with most motif transitions:
+  1935: 12 motifs showed significant change
+  1940: 9 motifs showed significant change
+  1941: 8 motifs showed significant change
+  1942: 7 motifs showed significant change
+  1934: 7 motifs showed significant change
+  1938: 7 motifs showed significant change
+  1944: 5 motifs showed significant change
+  1952: 5 motifs showed significant change
+
+Critical transitions by decade:
+  1920s: 15 transitions
+  1930s: 44 transitions
+  1940s: 38 transitions
+  1950s: 26 transitions
+  1960s: 17 transitions
+  1970s: 11 transitions
+
+8. SELF-ORGANIZATION EVIDENCE
+----------------------------------------
+Early period entropy: 4.382
+Middle period entropy: 4.373
+Late period entropy: 4.177
+
+Motif diversity metrics:
+Early period active motifs (>0.05 freq): 16/25
+Middle period active motifs (>0.05 freq): 14/25
+Late period active motifs (>0.05 freq): 15/25
+
+9. KEY FINDINGS AND CONCLUSIONS
+----------------------------------------
+Summary Statistics:
+• High-significance motifs (>0.4): 6 of 25
+• Strongly evolving motifs (time corr >0.3): 4
+• Stable motifs (CV <0.5): 0
+• Strong correlations (>|0.3|): 20
+
+Key Conclusions:
+• Expanded 25-motif analysis reveals more nuanced narrative patterns
+• Core crime motifs maintain high significance across all periods
+• Psychological and atmospheric motifs show increased importance over time
+• Strong clustering indicates distinct narrative 'eras' in Christie's work
+• Complex correlation networks suggest co-evolution of thematic elements
+• Evidence supports sophisticated self-organizing narrative ecosystem
+• Christie's style shows both consistency and deliberate evolution
+
+============================================================
+SAMPLE RESULTS PREVIEW
+============================================================
+
+Top 10 Motifs by Significance:
+ 1. garden          (Score: 0.528, Freq: 0.22)
+ 2. murderer        (Score: 0.505, Freq: 0.21)
+ 3. accident        (Score: 0.435, Freq: 0.15)
+ 4. study           (Score: 0.419, Freq: 0.09)
+ 5. motive          (Score: 0.417, Freq: 0.15)
+ 6. suicide         (Score: 0.402, Freq: 0.11)
+ 7. frightened      (Score: 0.397, Freq: 0.09)
+ 8. guilty          (Score: 0.370, Freq: 0.08)
+ 9. locked          (Score: 0.363, Freq: 0.07)
+10. clue            (Score: 0.345, Freq: 0.07)
+
+Strongest Correlations:
+  accused ↔ guilty: +0.648
+  locked ↔ key: +0.550
+  victim ↔ murderer: +0.481
+  guilty ↔ motive: +0.456
+  victim ↔ clue: +0.433
+
+Cluster Summary:
+  Cluster 0: 5 works (1963-1976)
+  Cluster 1: 23 works (1920-1975)
+  Cluster 2: 3 works (1926-1952)
+  Cluster 3: 2 works (1945-1972)
+  Cluster 4: 33 works (1922-1970)

@@ -1,4 +1,4 @@
-# Literary Systems as Complex Adaptive Systems: A Study of Motif Self-Organization in Agatha Christie's 66 Detective Novels
+# Literary Systems as Complex Adaptive Systems: A Computational Study of Motif Self-Organization in Agatha Christie's Complete Detective Fiction (66 novels)
 
 This repository contains the code, processed datasets, and analysis results supporting the research paper submitted to *Digital Scholarship in the Humanities*.
 
